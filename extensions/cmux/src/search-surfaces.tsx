@@ -66,18 +66,20 @@ export default function Command() {
     );
   }
 
-  // Group surfaces by workspace
+  // Group surfaces by workspace ref (unique identifier) to avoid merging
+  // workspaces that share the same name
   const workspaces = surfaces
-    ? [...new Set(surfaces.map((s) => s.workspaceName))].map((ws) => ({
-        name: ws,
-        surfaces: surfaces.filter((s) => s.workspaceName === ws),
+    ? [...new Set(surfaces.map((s) => s.workspaceRef))].map((ref) => ({
+        ref,
+        name: surfaces.find((s) => s.workspaceRef === ref)!.workspaceName,
+        surfaces: surfaces.filter((s) => s.workspaceRef === ref),
       }))
     : [];
 
   return (
     <List isLoading={isLoading} searchBarPlaceholder="Search surfaces...">
       {workspaces.map((ws) => (
-        <List.Section key={ws.name} title={ws.name}>
+        <List.Section key={ws.ref} title={ws.name}>
           {ws.surfaces.map((surface) => (
             <List.Item
               key={surface.ref}

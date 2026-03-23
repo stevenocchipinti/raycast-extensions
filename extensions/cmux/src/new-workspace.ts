@@ -1,4 +1,4 @@
-import { closeMainWindow, open } from "@raycast/api";
+import { closeMainWindow, open, showHUD } from "@raycast/api";
 import { execSync } from "child_process";
 
 export default async function Command() {
@@ -8,6 +8,8 @@ export default async function Command() {
   const match = output.match(/(workspace:\d+)/);
   if (match) {
     execSync(`cmux select-workspace --workspace ${match[1]}`);
+  } else {
+    await showHUD("New workspace created but could not be selected automatically");
   }
   await closeMainWindow();
 }
