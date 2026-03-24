@@ -1,6 +1,7 @@
 import { execSync } from "child_process";
 import { ActionPanel, Action, closeMainWindow, Color, Icon, List, open } from "@raycast/api";
 import { usePromise } from "@raycast/utils";
+import { listSurfaces, SurfaceList } from "./surfaces";
 
 interface Workspace {
   ref: string;
@@ -52,6 +53,27 @@ async function selectWorkspace(ref: string) {
   await closeMainWindow();
 }
 
+function WorkspaceSurfacesList({ workspaceRef, workspaceName }: { workspaceRef: string; workspaceName: string }) {
+  const { data: surfaces, isLoading, error } = usePromise(async () => listSurfaces());
+
+  if (error) {
+    return (
+      <List>
+        <List.EmptyView icon={Icon.ExclamationMark} title="cmux is not running" description={error.message} />
+      </List>
+    );
+  }
+
+  return (
+    <SurfaceList
+      surfaces={(surfaces ?? []).filter((surface) => surface.workspaceRef === workspaceRef)}
+      isLoading={isLoading}
+      searchBarPlaceholder={`Search surfaces in ${workspaceName}...`}
+      groupByWorkspace={false}
+    />
+  );
+}
+
 export default function Command() {
   const { data: windows, isLoading, error } = usePromise(async () => listWindows());
 
@@ -81,6 +103,12 @@ export default function Command() {
                     title="Select Workspace"
                     icon={Icon.ArrowRight}
                     onAction={() => selectWorkspace(workspace.ref)}
+                  />
+                  <Action.Push
+                    title="Show Surfaces"
+                    icon={Icon.List}
+                    shortcut={{ modifiers: ["cmd"], key: "enter" }}
+                    target={<WorkspaceSurfacesList workspaceRef={workspace.ref} workspaceName={workspace.name} />}
                   />
                 </ActionPanel>
               }
