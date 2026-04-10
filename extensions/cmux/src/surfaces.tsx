@@ -1,5 +1,5 @@
-import { execSync } from "child_process";
-import { Action, ActionPanel, closeMainWindow, Color, Icon, List, open } from "@raycast/api";
+import { Action, ActionPanel, closeMainWindow, Color, Icon, List, showToast, Toast } from "@raycast/api";
+import { execFileAsync, getErrorMessage, openCmuxApp } from "./cli";
 
 export interface Surface {
   ref: string;
@@ -17,8 +17,8 @@ interface SurfaceListProps {
   groupByWorkspace?: boolean;
 }
 
-export function listSurfaces(): Surface[] {
-  const output = execSync("cmux tree --all", { encoding: "utf8" });
+export async function listSurfaces(): Promise<Surface[]> {
+  const output = await execFileAsync("cmux", ["tree", "--all"]);
   const lines = output.split("\n");
 
   const surfaces: Surface[] = [];
@@ -54,11 +54,18 @@ export function listSurfaces(): Surface[] {
 }
 
 export async function focusSurface(workspaceRef: string, ref: string) {
-  await open("/Applications/cmux.app");
-  execSync(
-    `cmux select-workspace --workspace ${workspaceRef} && cmux move-surface --surface ${ref} --focus true --after-surface ${ref}`,
-  );
-  await closeMainWindow();
+  try {
+    await openCmuxApp();
+    await execFileAsync("cmux", ["select-workspace", "--workspace", workspaceRef]);
+    await execFileAsync("cmux", ["move-surface", "--surface", ref, "--focus", "true", "--after-surface", ref]);
+    await closeMainWindow();
+  } catch (error) {
+    await showToast({
+      style: Toast.Style.Failure,
+      title: "Failed to focus surface",
+      message: getErrorMessage(error),
+    });
+  }
 }
 
 function SurfaceItem({ surface }: { surface: Surface }) {

@@ -1,4 +1,4 @@
-# cmux Changelog
+# cmux
 
 ## [Initial Version] - {PR_MERGE_DATE}
 

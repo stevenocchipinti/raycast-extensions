@@ -1,6 +1,6 @@
-import { execSync } from "child_process";
-import { ActionPanel, Action, closeMainWindow, Color, Icon, List, open } from "@raycast/api";
+import { ActionPanel, Action, closeMainWindow, Color, Icon, List, showToast, Toast } from "@raycast/api";
 import { usePromise } from "@raycast/utils";
+import { execFileAsync, getErrorMessage, openCmuxApp } from "./cli";
 import { listSurfaces, SurfaceList } from "./surfaces";
 
 interface Workspace {
@@ -15,8 +15,8 @@ interface Window {
   workspaces: Workspace[];
 }
 
-function listWindows(): Window[] {
-  const output = execSync("cmux tree --all", { encoding: "utf8" });
+async function listWindows(): Promise<Window[]> {
+  const output = await execFileAsync("cmux", ["tree", "--all"]);
   const lines = output.split("\n");
 
   const windows: Window[] = [];
@@ -48,26 +48,32 @@ function listWindows(): Window[] {
 }
 
 async function selectWorkspace(ref: string) {
-  await open("/Applications/cmux.app");
-  execSync(`cmux select-workspace --workspace ${ref}`);
-  await closeMainWindow();
+  try {
+    await openCmuxApp();
+    await execFileAsync("cmux", ["select-workspace", "--workspace", ref]);
+    await closeMainWindow();
+  } catch (error) {
+    await showToast({
+      style: Toast.Style.Failure,
+      title: "Failed to select workspace",
+      message: getErrorMessage(error),
+    });
+  }
 }
 
-function WorkspaceSurfacesList({ workspaceRef, workspaceName }: { workspaceRef: string; workspaceName: string }) {
-  const { data: surfaces, isLoading, error } = usePromise(async () => listSurfaces());
-
-  if (error) {
-    return (
-      <List>
-        <List.EmptyView icon={Icon.ExclamationMark} title="cmux is not running" description={error.message} />
-      </List>
-    );
-  }
-
+function WorkspaceSurfacesList({
+  workspaceRef,
+  workspaceName,
+  surfaces,
+}: {
+  workspaceRef: string;
+  workspaceName: string;
+  surfaces: Awaited<ReturnType<typeof listSurfaces>>;
+}) {
   return (
     <SurfaceList
-      surfaces={(surfaces ?? []).filter((surface) => surface.workspaceRef === workspaceRef)}
-      isLoading={isLoading}
+      surfaces={surfaces.filter((surface) => surface.workspaceRef === workspaceRef)}
+      isLoading={false}
       searchBarPlaceholder={`Search surfaces in ${workspaceName}...`}
       groupByWorkspace={false}
     />
@@ -75,12 +81,15 @@ function WorkspaceSurfacesList({ workspaceRef, workspaceName }: { workspaceRef: 
 }
 
 export default function Command() {
-  const { data: windows, isLoading, error } = usePromise(async () => listWindows());
+  const { data: windows, isLoading, error } = usePromise(listWindows);
+  const { data: surfaces, error: surfacesError } = usePromise(listSurfaces);
 
-  if (error) {
+  if (error || surfacesError) {
+    const message = error?.message ?? surfacesError?.message ?? "Unknown error";
+
     return (
-      <List>
-        <List.EmptyView icon={Icon.ExclamationMark} title="cmux is not running" description={error.message} />
+      <List isLoading={false}>
+        <List.EmptyView icon={Icon.ExclamationMark} title="cmux is not running" description={message} />
       </List>
     );
   }
@@ -108,7 +117,13 @@ export default function Command() {
                     title="Show Surfaces"
                     icon={Icon.List}
                     shortcut={{ modifiers: ["cmd"], key: "enter" }}
-                    target={<WorkspaceSurfacesList workspaceRef={workspace.ref} workspaceName={workspace.name} />}
+                    target={
+                      <WorkspaceSurfacesList
+                        workspaceRef={workspace.ref}
+                        workspaceName={workspace.name}
+                        surfaces={surfaces ?? []}
+                      />
+                    }
                   />
                 </ActionPanel>
               }

@@ -1,15 +1,24 @@
-import { closeMainWindow, open, showHUD } from "@raycast/api";
-import { execSync } from "child_process";
+import { closeMainWindow, showHUD, showToast, Toast } from "@raycast/api";
+import { execFileAsync, getErrorMessage, openCmuxApp } from "./cli";
 
 export default async function Command() {
-  await open("/Applications/cmux.app");
-  const output = execSync("cmux new-workspace", { encoding: "utf8" }).trim();
-  // Output is like "OK workspace:N" — extract the ref and select it
-  const match = output.match(/(workspace:\d+)/);
-  if (match) {
-    execSync(`cmux select-workspace --workspace ${match[1]}`);
-  } else {
-    await showHUD("New workspace created but could not be selected automatically");
+  try {
+    await openCmuxApp();
+    const output = (await execFileAsync("cmux", ["new-workspace"])).trim();
+    const match = output.match(/(workspace:\d+)/);
+
+    if (match) {
+      await execFileAsync("cmux", ["select-workspace", "--workspace", match[1]]);
+    } else {
+      await showHUD("New workspace created but could not be selected automatically");
+    }
+
+    await closeMainWindow();
+  } catch (error) {
+    await showToast({
+      style: Toast.Style.Failure,
+      title: "Failed to create workspace",
+      message: getErrorMessage(error),
+    });
   }
-  await closeMainWindow();
 }
