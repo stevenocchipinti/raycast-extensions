@@ -2,10 +2,8 @@ import { closeMainWindow, showHUD } from "@raycast/api";
 import { execFileAsync, openCmuxApp } from "./cli";
 
 export default async function Command() {
-  await openCmuxApp();
-  // Give the app a moment to come to foreground before sending the keystroke
-  await new Promise((resolve) => setTimeout(resolve, 200));
   try {
+    await openCmuxApp();
     await execFileAsync("osascript", [
       "-e",
       'tell application "cmux" to activate',

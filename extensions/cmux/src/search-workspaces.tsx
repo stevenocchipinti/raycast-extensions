@@ -1,7 +1,7 @@
 import { ActionPanel, Action, closeMainWindow, Color, Icon, List, showToast, Toast } from "@raycast/api";
 import { usePromise } from "@raycast/utils";
 import { execFileAsync, getErrorMessage, openCmuxApp } from "./cli";
-import { listSurfaces, SurfaceList } from "./surfaces";
+import { Surface, SurfaceList } from "./surfaces";
 
 interface Workspace {
   ref: string;
@@ -15,12 +15,15 @@ interface Window {
   workspaces: Workspace[];
 }
 
-async function listWindows(): Promise<Window[]> {
+async function getTreeData(): Promise<{ windows: Window[]; surfaces: Surface[] }> {
   const output = await execFileAsync("cmux", ["tree", "--all"]);
   const lines = output.split("\n");
 
   const windows: Window[] = [];
+  const surfaces: Surface[] = [];
   let currentWindow: Window | null = null;
+  let currentWorkspaceRef = "";
+  let currentWorkspaceName = "";
 
   for (const line of lines) {
     const windowMatch = line.match(/^window\s+(window:\d+)(.*)/);
@@ -40,11 +43,31 @@ async function listWindows(): Promise<Window[]> {
       const name = workspaceMatch[2];
       const meta = workspaceMatch[3];
       const isSelected = meta.includes("[selected]");
+      currentWorkspaceRef = ref;
+      currentWorkspaceName = name;
       currentWindow.workspaces.push({ ref, name, isSelected });
+      continue;
+    }
+
+    const surfaceMatch = line.match(/surface\s+(surface:\d+)\s+\[[^\]]+\]\s+"([^"]+)"/);
+    if (surfaceMatch) {
+      const ref = surfaceMatch[1];
+      const name = surfaceMatch[2];
+      const isSelected = line.includes("[selected]");
+      const isActive = line.includes("◀ active");
+
+      surfaces.push({
+        ref,
+        name,
+        workspaceRef: currentWorkspaceRef,
+        workspaceName: currentWorkspaceName,
+        isSelected,
+        isActive,
+      });
     }
   }
 
-  return windows;
+  return { windows, surfaces };
 }
 
 async function selectWorkspace(ref: string) {
@@ -65,15 +88,17 @@ function WorkspaceSurfacesList({
   workspaceRef,
   workspaceName,
   surfaces,
+  isLoading,
 }: {
   workspaceRef: string;
   workspaceName: string;
-  surfaces: Awaited<ReturnType<typeof listSurfaces>>;
+  surfaces: Surface[];
+  isLoading: boolean;
 }) {
   return (
     <SurfaceList
       surfaces={surfaces.filter((surface) => surface.workspaceRef === workspaceRef)}
-      isLoading={false}
+      isLoading={isLoading}
       searchBarPlaceholder={`Search surfaces in ${workspaceName}...`}
       groupByWorkspace={false}
     />
@@ -81,22 +106,19 @@ function WorkspaceSurfacesList({
 }
 
 export default function Command() {
-  const { data: windows, isLoading, error } = usePromise(listWindows);
-  const { data: surfaces, error: surfacesError } = usePromise(listSurfaces);
+  const { data, isLoading, error } = usePromise(getTreeData);
 
-  if (error || surfacesError) {
-    const message = error?.message ?? surfacesError?.message ?? "Unknown error";
-
+  if (error) {
     return (
       <List isLoading={false}>
-        <List.EmptyView icon={Icon.ExclamationMark} title="cmux is not running" description={message} />
+        <List.EmptyView icon={Icon.ExclamationMark} title="cmux is not running" description={error.message} />
       </List>
     );
   }
 
   return (
     <List isLoading={isLoading} searchBarPlaceholder="Search workspaces...">
-      {windows?.map((window, index) => (
+      {data?.windows.map((window, index) => (
         <List.Section
           key={window.ref}
           title={window.isCurrent ? `Window ${index + 1} (active)` : `Window ${index + 1}`}
@@ -121,7 +143,8 @@ export default function Command() {
                       <WorkspaceSurfacesList
                         workspaceRef={workspace.ref}
                         workspaceName={workspace.name}
-                        surfaces={surfaces ?? []}
+                        surfaces={data.surfaces}
+                        isLoading={isLoading}
                       />
                     }
                   />
