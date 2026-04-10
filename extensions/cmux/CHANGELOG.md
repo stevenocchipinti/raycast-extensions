@@ -1,6 +1,6 @@
 # cmux
 
-## [Initial Version] - {PR_MERGE_DATE}
+## [Initial Version] - 2026-04-10
 
 - Search and jump to a workspace in cmux
 - View surfaces for a workspace directly from Search Workspaces with `Cmd+Enter`
